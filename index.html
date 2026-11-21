@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>로또 번호 뽑기</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 40px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f2f5fc;
+      color: #17233b;
+      font-family: "맑은 고딕", sans-serif;
+      text-align: center;
+    }
+
+    main {
+      width: 100%;
+      max-width: 900px;
+      padding: 48px 24px;
+      background: #fff;
+      border: 2px solid #dce3ef;
+      border-radius: 28px;
+      box-shadow: 0 12px 40px #17233b12;
+    }
+
+    h1 {
+      margin: 0 0 20px;
+      font-size: clamp(36px, 6vw, 52px);
+    }
+
+    .description {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.7;
+    }
+
+    .balls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 16px;
+      margin: 40px 0;
+    }
+
+    .ball {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 108px;
+      height: 108px;
+      border-radius: 50%;
+      color: #fff;
+      font-size: 46px;
+      font-weight: 800;
+      box-shadow: inset 0 -7px 0 #0002, 0 5px 10px #0002;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .ball:nth-child(1) { background: #9a5700; }
+    .ball:nth-child(2) { background: #1765bc; }
+    .ball:nth-child(3) { background: #bd3543; }
+    .ball:nth-child(4) { background: #7041b0; }
+    .ball:nth-child(5) { background: #17754a; }
+    .ball:nth-child(6) { background: #a53275; }
+
+    .buttons {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 18px;
+    }
+
+    button {
+      min-height: 88px;
+      padding: 20px 40px;
+      border: 3px solid transparent;
+      border-radius: 18px;
+      font: inherit;
+      font-size: 32px;
+      font-weight: 800;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    #drawButton {
+      background: #174db5;
+      color: #fff;
+    }
+
+    #redrawButton {
+      background: #fff;
+      color: #174db5;
+      border-color: #174db5;
+    }
+
+    button:hover:not(:disabled) {
+      filter: brightness(0.92);
+    }
+
+    button:focus-visible {
+      outline: 5px solid #bd6500;
+      outline-offset: 5px;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    #status {
+      min-height: 72px;
+      margin: 28px 0 0;
+      font-size: 24px;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+
+    .notice {
+      margin: 20px 0 0;
+      font-size: 18px;
+      line-height: 1.6;
+      color: #526078;
+    }
+
+    @media (max-width: 480px) {
+      body {
+        padding: 20px 12px;
+      }
+
+      main {
+        padding: 32px 16px;
+      }
+
+      .ball {
+        width: 80px;
+        height: 80px;
+        font-size: 36px;
+      }
+
+      .balls {
+        max-width: 300px;
+        margin: 30px auto;
+        gap: 14px;
+      }
+
+      button {
+        width: 100%;
+        padding: 20px;
+      }
+
+      .description {
+        font-size: 21px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>로또 번호 뽑기</h1>
+    <p class="description">
+      아래 버튼을 눌러 주세요.<br>
+      1부터 45까지 번호 6개를 뽑아 드립니다.
+    </p>
+
+    <!-- 빠르게 바뀌는 숫자는 음성 안내에서 제외합니다. -->
+    <div class="balls" aria-hidden="true">
+      <div class="ball">?</div>
+      <div class="ball">?</div>
+      <div class="ball">?</div>
+      <div class="ball">?</div>
+      <div class="ball">?</div>
+      <div class="ball">?</div>
+    </div>
+
+    <div class="buttons">
+      <button id="drawButton" type="button">번호 뽑기</button>
+      <button id="redrawButton" type="button" hidden>다시 뽑기</button>
+    </div>
+
+    <p id="status" role="status" aria-live="polite" aria-atomic="true">
+      준비되었습니다.
+    </p>
+
+    <p class="notice">
+      재미로 사용하는 무작위 번호 추첨입니다.<br>
+      당첨을 보장하지 않습니다.
+    </p>
+  </main>
+
+  <script>
+    const balls = document.querySelectorAll(".ball");
+    const drawButton = document.getElementById("drawButton");
+    const redrawButton = document.getElementById("redrawButton");
+    const status = document.getElementById("status");
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    );
+
+    let drawing = false;
+
+    // 0 이상 max 미만의 정수를 반환합니다.
+    function randomInt(max) {
+      if (window.crypto && window.crypto.getRandomValues) {
+        const buffer = new Uint32Array(1);
+        const range = 4294967296;
+        const limit = range - (range % max);
+
+        do {
+          window.crypto.getRandomValues(buffer);
+        } while (buffer[0] >= limit);
+
+        return buffer[0] % max;
+      }
+
+      return Math.floor(Math.random() * max);
+    }
+
+    // 1~45를 섞어 앞의 6개를 선택하므로 중복이 없습니다.
+    function pickNumbers() {
+      const numbers = Array.from({ length: 45 }, (_, i) => i + 1);
+
+      for (let i = numbers.length - 1; i > 0; i--) {
+        const j = randomInt(i + 1);
+        [numbers[i], numbers[j]] = [numbers[j], numbers[i]];
+      }
+
+      return numbers.slice(0, 6).sort((a, b) => a - b);
+    }
+
+    function displayNumbers(numbers) {
+      balls.forEach((ball, index) => {
+        ball.textContent = numbers[index];
+      });
+    }
+
+    function draw() {
+      if (drawing) return;
+
+      drawing = true;
+      drawButton.disabled = true;
+      redrawButton.disabled = true;
+      status.textContent = "번호를 뽑고 있습니다. 잠시만 기다려 주세요.";
+
+      const result = pickNumbers();
+      let animationTimer;
+
+      // 움직임 줄이기 설정을 사용하면 숫자 전환 효과를 생략합니다.
+      if (!reducedMotion.matches) {
+        displayNumbers(pickNumbers());
+        animationTimer = window.setInterval(() => {
+          displayNumbers(pickNumbers());
+        }, 70);
+      }
+
+      window.setTimeout(() => {
+        window.clearInterval(animationTimer);
+        displayNumbers(result);
+
+        status.textContent =
+          "추첨 완료! " + result.join(", ") + "번입니다.";
+
+        drawing = false;
+        drawButton.disabled = false;
+        redrawButton.disabled = false;
+
+        const firstDraw = !drawButton.hidden;
+        drawButton.hidden = true;
+        redrawButton.hidden = false;
+
+        if (firstDraw) {
+          redrawButton.focus();
+        }
+      }, reducedMotion.matches ? 300 : 1500);
+    }
+
+    drawButton.addEventListener("click", draw);
+    redrawButton.addEventListener("click", draw);
+  </script>
+</body>
+</html>
